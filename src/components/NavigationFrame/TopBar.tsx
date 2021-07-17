@@ -69,7 +69,7 @@ const Logo = () => {
         <Grid item>{/* Put Logo here */}</Grid>
         <Grid item>
           <Typography className={classes.audacesPerpetual}>
-            Audaces Perpetuals
+            LIQ Protocol | Bonfida Audaces Perpetuals
           </Typography>
         </Grid>
       </Grid>
