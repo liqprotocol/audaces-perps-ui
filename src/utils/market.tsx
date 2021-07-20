@@ -5,7 +5,12 @@ import React, {
   useCallback,
   useEffect,
 } from "react";
-import { MarketContextValues, PastTrade, FundingPayment } from "./types";
+import {
+  MarketContextValues,
+  PastTrade,
+  FundingPayment,
+  Trader,
+} from "./types";
 import { PublicKey } from "@solana/web3.js";
 import { useAsyncData } from "./fetch-loop";
 import { useConnection } from "./connection";
@@ -13,6 +18,7 @@ import {
   MarketState,
   UserAccount,
   getUserAccountsForOwner,
+  getDiscountAccount,
 } from "@audaces/perps";
 import tuple from "immutable-tuple";
 import { useWallet } from "./wallet";
@@ -22,6 +28,7 @@ const URL_API_TRADES = "https://serum-api.bonfida.com/perps/trades?market=";
 const URL_API_VOLUME = "https://serum-api.bonfida.com/perps/volume?market=";
 const URL_API_FUNDING =
   "https://serum-api.bonfida.com/perps/funding-payment?userAddress=";
+const URL_LEADERBOARD = "https://serum-api.bonfida.com/perps/leaderboard";
 
 export const MAX_LEVERAGE = 15;
 
@@ -205,7 +212,15 @@ export const useUserFunding = () => {
     if (!result.success) {
       throw new Error("Error fetching funding");
     }
-    const data: FundingPayment[] = result.data;
+    let data: FundingPayment[] = result.data;
+    let vide: FundingPayment[] = [];
+    data = data.reduce((unique, o) => {
+      // Server returning funding payment might contain duplicates. Checking signature for unicity
+      if (!unique.some((obj) => obj.signature === o.signature)) {
+        unique.push(o);
+      }
+      return unique;
+    }, vide);
     return data;
   };
   return useAsyncData(
@@ -221,4 +236,35 @@ export const getMarketNameFromAddress = (name: string) => {
     default:
       return "Unknown";
   }
+};
+
+export const useFidaAmount = () => {
+  const { wallet, connected } = useWallet();
+  const connection = useConnection();
+  const fn = async () => {
+    if (!connected) return;
+    const discountAccount = await getDiscountAccount(
+      connection,
+      wallet.publicKey
+    );
+    if (!discountAccount) return 0;
+    const accountInfo = await connection.getParsedAccountInfo(discountAccount);
+    // @ts-ignore
+    return accountInfo.value?.data.parsed.info.tokenAmount.uiAmount;
+  };
+  return useAsyncData(fn, tuple("useFidaAmount", connection, connected));
+};
+
+export const useLeaderBoard = () => {
+  const fn = async () => {
+    const result = await apiGet(URL_LEADERBOARD);
+    if (!result.success) {
+      throw new Error("Error fetching leaderboard");
+    }
+    const data: Trader[] = result.data;
+    return data.sort((a, b) => b.volume - a.volume);
+  };
+  return useAsyncData(fn, "useLeaderBoard", {
+    refreshInterval: 60 * 1_000 * 10,
+  });
 };

@@ -55,6 +55,9 @@ export interface FeesRowProps {
   fee: string;
   feeHighLeverage: string;
   requirements: string;
+  min: number;
+  max: number;
+  isUserFeeTier?: boolean;
 }
 
 export interface LayoutContextValues {
@@ -127,4 +130,9 @@ export interface FundingPayment {
   amount: number;
   fundingPayer: string;
   signature: string;
+}
+
+export interface Trader {
+  feePayer: string;
+  volume: number;
 }
