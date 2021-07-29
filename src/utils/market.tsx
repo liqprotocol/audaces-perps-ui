@@ -75,6 +75,8 @@ export const MarketProvider = ({ children }) => {
       connection,
       new PublicKey(market.address)
     );
+    marketState.quoteDecimals = Math.pow(10, marketState.quoteDecimals);
+    marketState.coinDecimals = Math.pow(10, marketState.coinDecimals);
     return marketState;
   }, [market.address, connection]);
 
@@ -301,4 +303,11 @@ export const useLeaderBoard = (
   return useAsyncData(fn, tuple("useLeaderBoard", startTime, endTime), {
     refreshInterval: 60 * 1_000 * 10,
   });
+};
+
+export const findSide = (action: string, side: string) => {
+  if (action === "closePosition") {
+    return side === "buy" ? "sell" : "buy";
+  }
+  return side;
 };
