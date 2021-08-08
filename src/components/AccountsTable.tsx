@@ -195,6 +195,10 @@ const useStyles = makeStyles({
   delete: {
     cursor: "pointer",
   },
+  fundingWarning: {
+    marginTop: 20,
+    textAlign: "center",
+  },
 });
 
 const AccountTableHead = () => {
@@ -239,6 +243,19 @@ const AccountTableHead = () => {
   );
 };
 
+const FundingWarning = () => {
+  const classes = useStyles();
+  return (
+    <div className={classes.fundingWarning}>
+      ⚠️
+      <Typography variant="body1" className={classes.text}>
+        Funding is debited from the user account. If there is not enough
+        balances to pay for funding the open position will be liquidated.
+      </Typography>
+    </div>
+  );
+};
+
 export const ModalAdd = ({
   open,
   setOpen,
@@ -251,7 +268,7 @@ export const ModalAdd = ({
   const classes = useStyles();
   const connection = useConnection();
   const { wallet, connected } = useWallet();
-  const { marketAddress, setRefreshUserAccount, marketState } = useMarket();
+  const { setRefreshUserAccount, marketState } = useMarket();
   const [collateral] = useAvailableCollateral();
   const [amount, setAmount] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -282,6 +299,7 @@ export const ModalAdd = ({
   const onClick = async () => {
     try {
       setLoading(true);
+      const userAccount = await UserAccount.retrieve(connection, acc);
       if (
         !amount ||
         !collateral?.collateralAddress ||
@@ -294,7 +312,7 @@ export const ModalAdd = ({
       });
       const [signers, instructions] = await depositCollateral(
         connection,
-        marketAddress,
+        userAccount.market,
         amount * marketState?.quoteDecimals,
         wallet.publicKey,
         acc
@@ -326,7 +344,7 @@ export const ModalAdd = ({
   };
   return (
     <Modal openModal={open} setOpen={setOpen}>
-      <div style={{ height: 250, width: 250 }}>
+      <div style={{ height: 350, width: 350 }}>
         <Typography align="center" className={classes.modalTitle}>
           Deposit
         </Typography>
@@ -387,6 +405,7 @@ export const ModalAdd = ({
             {loading ? <Spin size={20} /> : "Deposit"}
           </Button>
         </Grid>
+        <FundingWarning />
       </div>
     </Modal>
   );
@@ -404,8 +423,7 @@ const ModalWithdraw = ({
   const classes = useStyles();
   const connection = useConnection();
   const { wallet } = useWallet();
-  const { marketAddress, userAccount, setRefreshUserAccount, marketState } =
-    useMarket();
+  const { userAccount, setRefreshUserAccount, marketState } = useMarket();
   const [collateral] = useAvailableCollateral();
   const [amount, setAmount] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -443,7 +461,7 @@ const ModalWithdraw = ({
 
       const [signers, instructions] = await withdrawCollateral(
         connection,
-        marketAddress,
+        acc.market,
         amount * marketState?.quoteDecimals,
         wallet.publicKey,
         acc?.address
@@ -475,42 +493,45 @@ const ModalWithdraw = ({
   };
   return (
     <Modal openModal={open} setOpen={setOpen}>
-      <Typography className={classes.modalTitle}>
-        Withdraw Collateral from Vault
-      </Typography>
-      <Grid container justify="center" alignItems="flex-end" spacing={4}>
-        <Grid item>
-          <FormControl>
-            <TextField
-              value={amount}
-              onChange={onChangeCollateral}
-              inputProps={{
-                className: classes.inputProps,
-              }}
-              InputLabelProps={{ shrink: true }}
-              label="Amount"
-            />
-          </FormControl>
+      <div style={{ height: 350, width: 350 }}>
+        <Typography className={classes.modalTitle}>
+          Withdraw Collateral from Vault
+        </Typography>
+        <Grid container justify="center" alignItems="center" spacing={4}>
+          <Grid item>
+            <FormControl>
+              <TextField
+                value={amount}
+                onChange={onChangeCollateral}
+                inputProps={{
+                  className: classes.inputProps,
+                }}
+                InputLabelProps={{ shrink: true }}
+                label="Amount"
+              />
+            </FormControl>
+          </Grid>
+          <Grid item>
+            <Button className={classes.maxWithdrawButton} onClick={onClickMax}>
+              Max
+            </Button>
+          </Grid>
         </Grid>
-        <Grid item>
-          <Button className={classes.maxWithdrawButton} onClick={onClickMax}>
-            Max
+        <Grid
+          container
+          justify="center"
+          className={classes.withdrawButtonContainer}
+        >
+          <Button
+            disabled={loading}
+            onClick={onClick}
+            className={classes.sellButton}
+          >
+            {loading ? <Spin size={20} /> : "Withdraw"}
           </Button>
         </Grid>
-      </Grid>
-      <Grid
-        container
-        justify="center"
-        className={classes.withdrawButtonContainer}
-      >
-        <Button
-          disabled={loading}
-          onClick={onClick}
-          className={classes.sellButton}
-        >
-          {loading ? <Spin size={20} /> : "Withdraw"}
-        </Button>
-      </Grid>
+        <FundingWarning />
+      </div>
     </Modal>
   );
 };
