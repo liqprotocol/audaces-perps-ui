@@ -2,8 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 import { MAINNET_ENDPOINT } from "./connection";
-import useMediaQuery from "@material-ui/core/useMediaQuery/useMediaQuery";
-import useTheme from "@material-ui/core/styles/useTheme";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import words from "fun-word-list";
 
@@ -320,12 +318,6 @@ export const rpcRequest = async (method: string, params: any) => {
   }
 };
 
-export const useSmallScreen = (breakpoint: string = "sm") => {
-  const theme = useTheme();
-  // @ts-ignore
-  return useMediaQuery(theme.breakpoints.down(breakpoint));
-};
-
 export const formatSeconds = (sec: number): string => {
   let min;
   let s;
@@ -453,4 +445,20 @@ export const useWindowSize = (): WindowSize => {
   }, []);
 
   return windowSize;
+};
+
+export const useSmallScreen = (breakpoint: string = "sm") => {
+  const { width } = useWindowSize();
+  switch (breakpoint) {
+    case "xs":
+      return width < 600;
+    case "sm":
+      return width < 960;
+    case "md":
+      return width < 1280;
+    case "lg":
+      return width < 1920;
+    default:
+      return width < 960;
+  }
 };
