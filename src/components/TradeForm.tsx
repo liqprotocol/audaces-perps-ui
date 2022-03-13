@@ -26,11 +26,9 @@ import {
   roundToDecimal,
   BNB_ADDRESS,
 } from "../utils/utils";
-import { useConnection } from "../utils/connection";
-import { Transaction, Keypair, TransactionInstruction } from "@solana/web3.js";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { Keypair, TransactionInstruction } from "@solana/web3.js";
 import { useMarket, useMarkPrice, MAX_LEVERAGE } from "../utils/market";
-import { useWallet } from "../utils/wallet";
-import { sendTransaction } from "../utils/send";
 import Spin from "./Spin";
 import { refreshAllCaches } from "../utils/fetch-loop";
 import { IsolatedPositionChip, LeverageValueChip } from "./Chips";
@@ -39,6 +37,7 @@ import { useReferrer, useOpenPositions } from "../utils/perpetuals";
 import Emoji from "./Emoji";
 import CreateUserAccountButton from "./CreateUserAccountButton";
 import { ModalAdd } from "./AccountsTable";
+import { sendTx } from "../utils/send";
 
 const useStyles = makeStyles({
   root: {
@@ -178,8 +177,8 @@ const TradeForm = () => {
   const [quoteSize, setQuoteSize] = useState("0");
   const { userAccount, marketState, useIsolatedPositions, marketName } =
     useMarket();
-  const connection = useConnection();
-  const { wallet, connected, connect } = useWallet();
+  const { connection } = useConnection();
+  const { publicKey, sendTransaction, connected, connect } = useWallet();
   const markPrice = useMarkPrice();
   const [slippage, setSlippage] = useState<null | number>(null);
   const referrer = useReferrer();
@@ -324,7 +323,7 @@ const TradeForm = () => {
     console.log(`Referrer for the order ${referrer?.toBase58()}`);
     if (
       !userBalance ||
-      !wallet ||
+      !publicKey ||
       !userAccount ||
       !marketState?.quoteDecimals
     ) {
@@ -354,7 +353,6 @@ const TradeForm = () => {
         setLoading(true);
         notify({ message: "Opening position..." });
 
-        const tx = new Transaction();
         const [signers, instructions] = await createPosition(
           connection,
           side === 0 ? PositionType.Long : PositionType.Short,
@@ -363,13 +361,9 @@ const TradeForm = () => {
           userAccount,
           referrer
         );
-        tx.add(...instructions);
-        return await sendTransaction({
-          transaction: tx,
-          wallet: wallet,
-          signers: signers,
-          connection: connection,
-          sendingMessage: "Opening position...",
+
+        await sendTx(connection, publicKey, instructions, sendTransaction, {
+          signers,
         });
       } catch (err) {
         console.warn(`Error opening position - ${err}`);
@@ -392,7 +386,7 @@ const TradeForm = () => {
           return notify({ message: "Min order size is 5 USDC" });
         }
         setLoading(true);
-        const tx = new Transaction();
+
         const [signers, instructions] = await increasePosition(
           connection,
           currentPosition.marketAddress,
@@ -402,17 +396,12 @@ const TradeForm = () => {
           userAccount.owner,
           userAccount.address,
           BNB_ADDRESS,
-          await getDiscountAccount(connection, wallet.publicKey),
-          wallet.publicKey,
+          await getDiscountAccount(connection, publicKey),
+          publicKey,
           referrer
         );
-        tx.add(...instructions);
-        return await sendTransaction({
-          transaction: tx,
-          wallet: wallet,
-          signers: signers,
-          connection: connection,
-          sendingMessage: "Increasing position...",
+        await sendTx(connection, publicKey, instructions, sendTransaction, {
+          signers,
         });
       } catch (err) {
         console.warn(`Error increasing position ${err}`);
@@ -431,14 +420,14 @@ const TradeForm = () => {
       try {
         setLoading(true);
         const _size = parseFloat(baseSize) * marketState?.coinDecimals;
-        const tx = new Transaction();
+
         let signers: Keypair[] = [];
         let instructions: TransactionInstruction[] = [];
         if (_size === currentPosition.size) {
           [signers, instructions] = await completeClosePosition(
             connection,
             currentPosition,
-            wallet.publicKey,
+            publicKey,
             referrer
           );
         } else {
@@ -446,17 +435,12 @@ const TradeForm = () => {
             connection,
             currentPosition,
             _size,
-            wallet.publicKey,
+            publicKey,
             referrer
           );
         }
-        tx.add(...instructions);
-        return await sendTransaction({
-          transaction: tx,
-          wallet: wallet,
-          signers: signers,
-          connection: connection,
-          sendingMessage: "Decreasing position...",
+        await sendTx(connection, publicKey, instructions, sendTransaction, {
+          signers,
         });
       } catch (err) {
         console.warn(`Error decreasing position ${err}`);

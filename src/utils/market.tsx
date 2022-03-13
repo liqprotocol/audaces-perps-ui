@@ -14,7 +14,7 @@ import {
 } from "./types";
 import { PublicKey } from "@solana/web3.js";
 import { useAsyncData } from "./fetch-loop";
-import { useConnection } from "./connection";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import {
   MarketState,
   UserAccount,
@@ -22,7 +22,6 @@ import {
   getDiscountAccount,
 } from "@audaces/perps";
 import tuple from "immutable-tuple";
-import { useWallet } from "./wallet";
 import { apiGet, roundToDecimal, useLocalStorageState } from "./utils";
 
 const URL_API_TRADES = "https://serum-api.bonfida.com/perps/trades?market=";
@@ -53,7 +52,7 @@ const MarketContext: React.Context<null | MarketContextValues> =
   React.createContext<null | MarketContextValues>(null);
 
 export const MarketProvider = ({ children }) => {
-  const connection = useConnection();
+  const { connection } = useConnection();
   const [slippage, setSlippage] = useState(0.1);
   const [autoApprove, setAutoApprove] = useLocalStorageState(
     "autoApprove",
@@ -67,7 +66,7 @@ export const MarketProvider = ({ children }) => {
     "useIsolatedPositions",
     false
   );
-  const { wallet, connected } = useWallet();
+  const { publicKey, connected } = useWallet();
 
   const marketAddress = useMemo(
     () => new PublicKey(market.address),
@@ -93,13 +92,10 @@ export const MarketProvider = ({ children }) => {
 
   useEffect(() => {
     const fn = async () => {
-      if (!connected) {
+      if (!publicKey) {
         return;
       }
-      const userAccounts = await getUserAccountsForOwner(
-        connection,
-        wallet.publicKey
-      );
+      const userAccounts = await getUserAccountsForOwner(connection, publicKey);
       const filtered = userAccounts
         ?.filter((u) => u?.market.equals(marketAddress))
         .sort((a, b) => {
@@ -224,11 +220,11 @@ export const useMarketTrades = (marketAddress: PublicKey) => {
 };
 
 export const useUserTrades = (marketAddress: PublicKey) => {
-  const { wallet, connected } = useWallet();
+  const { connected, publicKey } = useWallet();
   const fn = async () => {
-    if (!connected || !wallet.publicKey) return;
+    if (!publicKey) return;
     const result = await apiGet(
-      `${URL_API_TRADES}${marketAddress.toBase58()}&feePayer=${wallet.publicKey.toBase58()}`
+      `${URL_API_TRADES}${marketAddress.toBase58()}&feePayer=${publicKey.toBase58()}`
     );
     if (!result.success) {
       throw new Error("Error fetching past trade");
@@ -269,14 +265,11 @@ export const useUserFunding = () => {
 };
 
 export const useFidaAmount = () => {
-  const { wallet, connected } = useWallet();
-  const connection = useConnection();
+  const { connected, publicKey } = useWallet();
+  const { connection } = useConnection();
   const fn = async () => {
-    if (!connected) return;
-    const discountAccount = await getDiscountAccount(
-      connection,
-      wallet.publicKey
-    );
+    if (!publicKey) return;
+    const discountAccount = await getDiscountAccount(connection, publicKey);
     if (!discountAccount) return 0;
     const accountInfo = await connection.getParsedAccountInfo(discountAccount);
     // @ts-ignore
@@ -317,7 +310,7 @@ export const findSide = (action: string, side: string) => {
 };
 
 export const useMarketState = (marketAddress: PublicKey) => {
-  const connection = useConnection();
+  const { connection } = useConnection();
   const fn = async () => {
     const marketState = await MarketState.retrieve(connection, marketAddress);
     marketState.quoteDecimals = Math.pow(10, marketState.quoteDecimals);

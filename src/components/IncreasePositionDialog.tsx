@@ -9,15 +9,13 @@ import {
   increasePositionBaseSize,
   PositionType,
 } from "@audaces/perps";
-import { useConnection } from "../utils/connection";
-import { useWallet } from "../utils/wallet";
-import { sendTransaction } from "../utils/send";
-import { Transaction } from "@solana/web3.js";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import Spin from "./Spin";
 import { refreshAllCaches } from "../utils/fetch-loop";
 import { useMarkPrice, useMarket } from "../utils/market";
 import { UpdatedPosition } from "./SummaryPosition";
 import { useReferrer } from "../utils/perpetuals";
+import { sendTx } from "../utils/send";
 
 const useStyles = makeStyles({
   modalTitle: {
@@ -69,8 +67,8 @@ const IncreasePositionDialog = ({ position }: { position: Position }) => {
   const classes = useStyles();
   const [size, setSize] = useState("0");
   const [loading, setLoading] = useState(false);
-  const { wallet } = useWallet();
-  const connection = useConnection();
+  const { publicKey, sendTransaction } = useWallet();
+  const { connection } = useConnection();
   const markPrice = useMarkPrice();
   const { marketState } = useMarket();
   const referrer = useReferrer();
@@ -119,12 +117,7 @@ const IncreasePositionDialog = ({ position }: { position: Position }) => {
       message: "Increasing position...",
     });
     try {
-      if (
-        !wallet.publicKey ||
-        !size ||
-        !markPrice ||
-        !marketState?.coinDecimals
-      ) {
+      if (!publicKey || !size || !markPrice || !marketState?.coinDecimals) {
         return;
       }
 
@@ -134,15 +127,10 @@ const IncreasePositionDialog = ({ position }: { position: Position }) => {
         connection,
         position,
         parsedSize,
-        wallet.publicKey,
+        publicKey,
         referrer
       );
-
-      await sendTransaction({
-        transaction: new Transaction().add(...instructions),
-        wallet: wallet,
-        connection: connection,
-      });
+      await sendTx(connection, publicKey, instructions, sendTransaction);
 
       notify({
         message: "Position increased",

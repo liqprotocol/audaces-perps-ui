@@ -2,11 +2,8 @@ import React, { useState } from "react";
 import { makeStyles } from "@material-ui/core/styles";
 import { Grid, Button } from "@material-ui/core";
 import { useAvailableCollateral } from "../utils/perpetuals";
-import { useConnection } from "../utils/connection";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { notify } from "../utils/notifications";
-import { sendTransaction } from "../utils/send";
-import { Transaction } from "@solana/web3.js";
-import { useWallet } from "../utils/wallet";
 import {
   createAssociatedTokenAccount,
   createUserAccount,
@@ -14,6 +11,7 @@ import {
 import { useMarket } from "../utils/market";
 import Spin from "./Spin";
 import { USDC_MINT, sleep } from "../utils/utils";
+import { sendTx } from "../utils/send";
 
 const useStyles = makeStyles({
   table: {
@@ -42,11 +40,12 @@ const CreateUserAccountButton = () => {
   const classes = useStyles();
   const [loading, setLoading] = useState(false);
   const [collateral] = useAvailableCollateral();
-  const connection = useConnection();
-  const { wallet } = useWallet();
+  const { connection } = useConnection();
+  const { publicKey, sendTransaction } = useWallet();
   const { marketAddress, setRefreshUserAccount } = useMarket();
 
   const onClickCreate = async () => {
+    if (!publicKey) return;
     try {
       setLoading(true);
       if (!collateral?.collateralAddress) {
@@ -62,16 +61,16 @@ const CreateUserAccountButton = () => {
       if (!collateralInfo?.data) {
         notify({ message: "Creating collateral account" });
         const createAccountInstructions = await createAssociatedTokenAccount(
-          wallet?.publicKey,
-          wallet?.publicKey,
+          publicKey,
+          publicKey,
           USDC_MINT
         );
-        await sendTransaction({
-          transaction: new Transaction().add(createAccountInstructions),
-          wallet: wallet,
-          signers: [],
-          connection: connection,
-        });
+        await sendTx(
+          connection,
+          publicKey,
+          [createAccountInstructions],
+          sendTransaction
+        );
       }
       notify({
         message: "Creating trading account...",
@@ -80,15 +79,12 @@ const CreateUserAccountButton = () => {
       const [signers, instructions] = await createUserAccount(
         connection,
         marketAddress,
-        wallet?.publicKey
+        publicKey
       );
-
-      await sendTransaction({
-        transaction: new Transaction().add(...instructions),
-        wallet: wallet,
-        signers: signers,
-        connection: connection,
+      await sendTx(connection, publicKey, instructions, sendTransaction, {
+        signers,
       });
+
       notify({
         message: "Account created",
         variant: "success",

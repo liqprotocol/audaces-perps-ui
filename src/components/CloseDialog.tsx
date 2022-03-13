@@ -10,15 +10,13 @@ import {
   completeClosePosition,
   PositionType,
 } from "@audaces/perps";
-import { useConnection } from "../utils/connection";
-import { useWallet } from "../utils/wallet";
-import { sendTransaction } from "../utils/send";
-import { Transaction } from "@solana/web3.js";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import Spin from "./Spin";
 import { refreshAllCaches } from "../utils/fetch-loop";
 import { useMarkPrice, useMarket } from "../utils/market";
 import { UpdatedPosition } from "./SummaryPosition";
 import { useReferrer } from "../utils/perpetuals";
+import { sendTx } from "../utils/send";
 
 const useStyles = makeStyles({
   modalTitle: {
@@ -82,8 +80,8 @@ const useStyles = makeStyles({
 export const CompleteCloseDialog = ({ position }: { position: Position }) => {
   const classes = useStyles();
   const [loading, setLoading] = useState(false);
-  const { wallet } = useWallet();
-  const connection = useConnection();
+  const { publicKey, sendTransaction } = useWallet();
+  const { connection } = useConnection();
   const referrer = useReferrer();
 
   const onClick = async () => {
@@ -92,22 +90,18 @@ export const CompleteCloseDialog = ({ position }: { position: Position }) => {
       message: "Closing position...",
     });
     try {
-      if (!wallet.publicKey) {
+      if (!publicKey) {
         return;
       }
-      const tx = new Transaction();
+
       const [signers, instruction] = await completeClosePosition(
         connection,
         position,
-        wallet.publicKey,
+        publicKey,
         referrer
       );
-      tx.add(...instruction);
-      await sendTransaction({
-        transaction: tx,
-        wallet: wallet,
-        connection: connection,
-        signers: signers,
+      await sendTx(connection, publicKey, instruction, sendTransaction, {
+        signers,
       });
 
       notify({
@@ -145,8 +139,8 @@ export const PartialCloseDialog = ({ position }: { position: Position }) => {
   const classes = useStyles();
   const [size, setSize] = useState("0");
   const [loading, setLoading] = useState(false);
-  const { wallet } = useWallet();
-  const connection = useConnection();
+  const { publicKey, sendTransaction } = useWallet();
+  const { connection } = useConnection();
   const markPrice = useMarkPrice();
   const referrer = useReferrer();
   const { marketState } = useMarket();
@@ -204,7 +198,7 @@ export const PartialCloseDialog = ({ position }: { position: Position }) => {
       message: "Closing position...",
     });
     try {
-      if (!wallet.publicKey || !size || !marketState?.coinDecimals) {
+      if (!publicKey || !size || !marketState?.coinDecimals) {
         return;
       }
       let parsedSize = parseFloat(size) * marketState?.coinDecimals;
@@ -213,39 +207,30 @@ export const PartialCloseDialog = ({ position }: { position: Position }) => {
       }
       // Close the position completely
       if (parsedSize >= position.vCoinAmount) {
-        const tx = new Transaction();
         const [signers, instruction] = await completeClosePosition(
           connection,
           position,
-          wallet.publicKey,
+          publicKey,
           referrer
         );
-        tx.add(...instruction);
-        await sendTransaction({
-          transaction: tx,
-          wallet: wallet,
-          connection: connection,
-          signers: signers,
+        await sendTx(connection, publicKey, instruction, sendTransaction, {
+          signers,
         });
         return notify({
           message: "Position reduced",
           variant: "success",
         });
       }
-      const tx = new Transaction();
+
       const [signers, instruction] = await reducePositionBaseSize(
         connection,
         position,
         parsedSize,
-        wallet.publicKey,
+        publicKey,
         referrer
       );
-      tx.add(...instruction);
-      await sendTransaction({
-        transaction: tx,
-        wallet: wallet,
-        connection: connection,
-        signers: signers,
+      await sendTx(connection, publicKey, instruction, sendTransaction, {
+        signers,
       });
 
       notify({

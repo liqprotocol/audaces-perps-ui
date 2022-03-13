@@ -1,8 +1,7 @@
-import { useWallet } from "./wallet";
 import { getProgramAccounts, USDC_MINT, useLocalStorageState } from "./utils";
 import { useAsyncData } from "./fetch-loop";
 import tuple from "immutable-tuple";
-import { useConnection } from "./connection";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import {
   findAssociatedTokenAddress,
   getUserAccountsForOwner,
@@ -43,7 +42,7 @@ export const getInputKey = async (input: string) => {
 };
 
 export const useQuoteAccountFromRefCode = (refCode: string | undefined) => {
-  const connection = useConnection();
+  const { connection } = useConnection();
   const get = async () => {
     if (!refCode || !ALLOW_REF_LINKS) return REFERRAL_FEES_ADDRESS;
     try {
@@ -91,13 +90,13 @@ export const useReferrer = (): PublicKey | undefined => {
 };
 
 export const useOpenPositions = () => {
-  const connection = useConnection();
-  const { wallet, connected } = useWallet();
+  const { connection } = useConnection();
+  const { publicKey, connected } = useWallet();
   const get = async () => {
-    if (!connected || !wallet) {
+    if (!connected || !publicKey) {
       return null;
     }
-    const result = await getOpenPositions(connection, wallet.publicKey);
+    const result = await getOpenPositions(connection, publicKey);
     return result;
   };
   return useAsyncData(get, tuple("useOpenPositions", connected), {
@@ -106,10 +105,10 @@ export const useOpenPositions = () => {
 };
 
 export const useAvailableCollateral = () => {
-  const connection = useConnection();
-  const { wallet } = useWallet();
+  const { connection } = useConnection();
+  const { publicKey } = useWallet();
   const get = async () => {
-    if (!wallet) {
+    if (!publicKey) {
       return {
         collateralAddress: null,
         amount: null,
@@ -118,7 +117,7 @@ export const useAvailableCollateral = () => {
       };
     }
     const collateralAddress = await findAssociatedTokenAddress(
-      wallet?.publicKey,
+      publicKey,
       USDC_MINT
     );
     const collateralAccountInfo = await connection.getParsedAccountInfo(
@@ -139,17 +138,17 @@ export const useAvailableCollateral = () => {
   };
   return useAsyncData(
     get,
-    tuple("useAvailableCollateral", wallet?.publicKey?.toBase58())
+    tuple("useAvailableCollateral", publicKey?.toBase58())
   );
 };
 
 export const useTokenAccounts = (mint?: string) => {
-  const { wallet, connected } = useWallet();
+  const { publicKey, connected } = useWallet();
   const getTokenAccounts = async () => {
-    if (!connected) {
+    if (!connected || !publicKey) {
       return null;
     }
-    let accounts = await getProgramAccounts(wallet?.publicKey);
+    let accounts = await getProgramAccounts(publicKey);
     accounts = accounts?.sort((a, b) => {
       return (
         b.account.data.parsed.info.tokenAmount.uiAmount -
@@ -164,7 +163,7 @@ export const useTokenAccounts = (mint?: string) => {
 
   return useAsyncData(
     getTokenAccounts,
-    tuple("getTokenAccounts", wallet, connected)
+    tuple("getTokenAccounts", publicKey, connected)
   );
 };
 
@@ -175,7 +174,7 @@ export const findUserAccountsForMint = (tokenAccounts: any, mint: string) => {
 };
 
 export const useOraclePrice = (marketAddress: PublicKey | undefined | null) => {
-  const connection = useConnection();
+  const { connection } = useConnection();
   const get = async () => {
     if (!marketAddress) return;
     const marketState = await MarketState.retrieve(connection, marketAddress);
@@ -192,26 +191,18 @@ export const useOraclePrice = (marketAddress: PublicKey | undefined | null) => {
 };
 
 export const useUserData = () => {
-  const { wallet, connected } = useWallet();
-  const connection = useConnection();
+  const { publicKey } = useWallet();
+  const { connection } = useConnection();
   const { refreshUserAccount } = useMarket();
   const get = async () => {
-    if (!connected) {
+    if (!publicKey) {
       return null;
     }
-    const userAccounts = await getUserAccountsForOwner(
-      connection,
-      wallet.publicKey
-    );
+    const userAccounts = await getUserAccountsForOwner(connection, publicKey);
     return userAccounts;
   };
   return useAsyncData(
     get,
-    tuple(
-      "useUserData",
-      connection,
-      wallet?.publicKey?.toBase58(),
-      refreshUserAccount
-    )
+    tuple("useUserData", connection, publicKey?.toBase58(), refreshUserAccount)
   );
 };

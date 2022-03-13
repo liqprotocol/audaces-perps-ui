@@ -15,7 +15,6 @@ import {
   TableHead,
   TableRow,
 } from "@material-ui/core";
-import { useWallet } from "../utils/wallet";
 import WalletConnect from "./WalletConnect";
 import { useUserData } from "../utils/perpetuals";
 import Spin from "./Spin";
@@ -26,7 +25,7 @@ import {
   withdrawCollateral,
 } from "@audaces/perps";
 import { useMarket, MARKETS } from "../utils/market";
-import { useConnection } from "../utils/connection";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import {
   checkTextFieldNumberInput,
   roundToDecimal,
@@ -34,8 +33,7 @@ import {
 } from "../utils/utils";
 import { useAvailableCollateral } from "../utils/perpetuals";
 import { notify } from "../utils/notifications";
-import { PublicKey, Transaction } from "@solana/web3.js";
-import { sendTransaction } from "../utils/send";
+import { PublicKey } from "@solana/web3.js";
 import CreateUserAccountButton from "./CreateUserAccountButton";
 import { InformationRow } from "./SummaryPosition";
 import LaunchIcon from "@material-ui/icons/Launch";
@@ -43,6 +41,7 @@ import { ExplorerLink } from "./Link";
 import { useHistory } from "react-router-dom";
 import refresh from "../assets/tables/refresh.svg";
 import deleteIcon from "../assets/tables/delete.svg";
+import { sendTx } from "../utils/send";
 
 const useStyles = makeStyles({
   table: {
@@ -266,8 +265,8 @@ export const ModalAdd = ({
   acc: PublicKey;
 }) => {
   const classes = useStyles();
-  const connection = useConnection();
-  const { wallet, connected } = useWallet();
+  const { connection } = useConnection();
+  const { publicKey, connected, sendTransaction } = useWallet();
   const { setRefreshUserAccount, marketState } = useMarket();
   const [collateral] = useAvailableCollateral();
   const [amount, setAmount] = useState<number | null>(null);
@@ -276,7 +275,8 @@ export const ModalAdd = ({
 
   useEffect(() => {
     const fn = async () => {
-      const quoteAccount = await getQuoteAccount(wallet.publicKey);
+      if (!publicKey) return;
+      const quoteAccount = await getQuoteAccount(publicKey);
       const info = await connection.getParsedAccountInfo(quoteAccount);
       if (!!info) {
         //@ts-ignore
@@ -303,7 +303,8 @@ export const ModalAdd = ({
       if (
         !amount ||
         !collateral?.collateralAddress ||
-        !marketState?.quoteDecimals
+        !marketState?.quoteDecimals ||
+        !publicKey
       ) {
         return;
       }
@@ -314,15 +315,12 @@ export const ModalAdd = ({
         connection,
         userAccount.market,
         amount * marketState?.quoteDecimals,
-        wallet.publicKey,
+        publicKey,
         acc
       );
 
-      await sendTransaction({
-        transaction: new Transaction().add(...instructions),
-        wallet: wallet,
-        signers: signers,
-        connection: connection,
+      await sendTx(connection, publicKey, instructions, sendTransaction, {
+        signers,
       });
 
       notify({
@@ -421,8 +419,8 @@ const ModalWithdraw = ({
   acc: UserAccount;
 }) => {
   const classes = useStyles();
-  const connection = useConnection();
-  const { wallet } = useWallet();
+  const { connection } = useConnection();
+  const { publicKey, sendTransaction } = useWallet();
   const { userAccount, setRefreshUserAccount, marketState } = useMarket();
   const [collateral] = useAvailableCollateral();
   const [amount, setAmount] = useState<number | null>(null);
@@ -451,7 +449,8 @@ const ModalWithdraw = ({
         !amount ||
         !collateral?.collateralAddress ||
         !userAccount?.address ||
-        !marketState?.quoteDecimals
+        !marketState?.quoteDecimals ||
+        !publicKey
       ) {
         return;
       }
@@ -463,15 +462,12 @@ const ModalWithdraw = ({
         connection,
         acc.market,
         amount * marketState?.quoteDecimals,
-        wallet.publicKey,
+        publicKey,
         acc?.address
       );
 
-      await sendTransaction({
-        transaction: new Transaction().add(...instructions),
-        wallet: wallet,
-        signers: signers,
-        connection: connection,
+      await sendTx(connection, publicKey, instructions, sendTransaction, {
+        signers,
       });
 
       notify({
@@ -544,8 +540,8 @@ const AccountRow = ({
   index: number;
 }) => {
   const classes = useStyles();
-  const connection = useConnection();
-  const { wallet } = useWallet();
+  const { connection } = useConnection();
+  const { publicKey, sendTransaction } = useWallet();
   const [loading, setLoading] = useState(false);
   const {
     userAccount,
@@ -563,6 +559,7 @@ const AccountRow = ({
   const market = MARKETS.find((m) => m.address === acc?.market.toBase58());
 
   const onClickExtractFunding = async () => {
+    if (!publicKey) return;
     if (
       !userAccount ||
       marketState?.fundingHistoryOffset === userAccount?.lastFundingOffset
@@ -584,13 +581,11 @@ const AccountRow = ({
         instanceIndex,
         userAccount?.address
       );
-      await sendTransaction({
-        transaction: new Transaction().add(...instructions),
-        connection: connection,
-        wallet: wallet,
-        signers: signers,
+      await sendTx(connection, publicKey, instructions, sendTransaction, {
+        signers,
       });
     } catch (err) {
+      // @ts-ignore
       if (err.message.includes("no-op")) {
         return notify({
           message: `Nothing to extract`,
@@ -612,20 +607,18 @@ const AccountRow = ({
   }
 
   const onClickDelete = async () => {
+    if (!publicKey) return;
     if (acc.balance > 0) {
       return notify({ message: "Cannot delete account with collateral" });
     }
     try {
       const [signers, instructions] = await closeAccount(
         acc.address,
-        wallet.publicKey,
-        wallet.publicKey
+        publicKey,
+        publicKey
       );
-      await sendTransaction({
-        transaction: new Transaction().add(...instructions),
-        wallet: wallet,
-        connection: connection,
-        signers: signers,
+      await sendTx(connection, publicKey, instructions, sendTransaction, {
+        signers,
       });
     } catch (err) {
       console.warn(
